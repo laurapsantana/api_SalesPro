@@ -2,7 +2,6 @@ const express = require('express');
 const { Pool } = require('pg');
 const app = express();
 const router = express.Router();
-const db = require('./db');
 require('dotenv').config();  // Carrega variáveis de ambiente
 
 // Configurações de conexão com o banco de dados PostgreSQL
@@ -110,7 +109,7 @@ app.get('/venda-mensal', async (req, res) => {
 // Exemplo de endpoint para produtos mais vendidos na semana
 app.get('/produtos/mais-vendidos/semana', async (req, res) => {
   try {
-      const resultado = await pool.query(` // Alterado de db para pool
+      const resultado = await pool.query(`
           SELECT codigo_produto, descricao_produto, SUM(qtde) AS total_vendas
           FROM fatec.fatec_vendas
           WHERE data_emissao >= CURRENT_DATE - INTERVAL '7 days'
@@ -144,6 +143,110 @@ app.get('/produtos-mais-vendidos-mes/:mes', async (req, res) => {
   } catch (error) {
     console.error('Erro ao buscar produtos mais vendidos:', error);
     res.status(500).json({ error: 'Erro ao buscar dados' });
+  }
+});
+
+// Endpoint para obter desempenho por região
+app.get('/desempenho-por-regiao', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        cidade, 
+        SUM(total) AS total_vendas
+      FROM 
+        fatec.fatec_vendas
+      GROUP BY 
+        cidade
+      ORDER BY 
+        total_vendas DESC;
+    `);
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error("Erro ao obter desempenho por região:", error);
+    res.status(500).json({ error: "Erro ao obter desempenho por região" });
+  }
+});
+
+// Endpoint para retornar uma análise detalhada das vendas
+app.get('/analise/vendas', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        TO_CHAR(data_emissao, 'YYYY-MM-DD') AS data,
+        SUM(total) AS total_vendas,
+        COUNT(*) AS numero_vendas
+      FROM 
+        fatec.fatec_vendas
+      GROUP BY 
+        data_emissao
+      ORDER BY 
+        data;
+    `);
+    const analiseVendas = result.rows.map(row => ({
+      data: row.data,
+      total_vendas: parseFloat(row.total_vendas),
+      numero_vendas: parseInt(row.numero_vendas)
+    }));
+    res.status(200).json(analiseVendas);
+  } catch (error) {
+    console.error('Erro ao buscar análise de vendas:', error);
+    res.status(500).json({ error: 'Erro ao buscar análise de vendas' });
+  }
+});
+
+// Endpoint para retornar os clientes que mais compraram nos últimos meses
+app.get('/relatorios/clientes-frequentes', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id_cliente, razao_cliente, COUNT(*) AS total_compras
+      FROM fatec.fatec_vendas
+      GROUP BY id_cliente, razao_cliente
+      ORDER BY total_compras DESC
+      LIMIT 10;
+    `);
+
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error('Erro ao buscar clientes frequentes:', error);
+    res.status(500).json({ error: 'Erro ao buscar clientes frequentes' });
+  }
+});
+
+// Endpoint para retornar todos os produtos de uma categoria específica aqui esta sendo utilizado a categoria copos
+//app.get('/produtos/por-categoria/:categoria', async (req, res) => {
+  //const categoria = req.params.categoria; // O nome da categoria será passado como parâmetro
+  //try {
+   // const result = await pool.query(`
+   //   SELECT * 
+   //   FROM fatec.fatec_produtos
+   //   WHERE id_grupo = 202;
+   /// `, [categoria]);
+
+   // res.status(200).json(result.rows);
+  //} catch (error) {
+  //  console.error('Erro ao buscar produtos por categoria:', error);
+  //  res.status(500).json({ error: 'Erro ao buscar produtos por categoria' });
+ // }
+//});
+
+// Endpoint para retornar os detalhes de um cliente específico baseado no seu ID
+app.get('/cliente/:id', async (req, res) => {
+  const id = req.params.id; // O ID do cliente será passado como parâmetro tera que ser o id exato do cliente ex:6541
+  try {
+    const result = await pool.query(`
+      SELECT * 
+      FROM fatec.fatec_clientes 
+      WHERE id_cliente = $1; 
+    `, [id]);
+
+    if (result.rows.length > 0) {
+      res.status(200).json(result.rows[0]);
+    } else {
+      res.status(404).json({ error: 'Cliente não encontrado' });
+    }
+  } catch (error) {
+    console.error('Erro ao buscar detalhes do cliente:', error);
+    res.status(500).json({ error: 'Erro ao buscar detalhes do cliente' });
   }
 });
 
