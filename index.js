@@ -34,6 +34,7 @@ app.get('/clientes', async (req, res) => {
   }
 });
 
+// Rota para buscar dados das vendas
 app.get('/vendas', async (req, res) => {
   try {
     const result = await pool.query('select * from fatec.fatec_vendas'); 
@@ -41,16 +42,6 @@ app.get('/vendas', async (req, res) => {
   } catch (err) {
     console.error('Erro ao buscar dados de vendas:', err);
     res.status(500).send('Erro ao buscar dados das vendas');
-  }
-});
-
-app.get('/contas-receber', async (req, res) => {
-  try {
-    const result = await pool.query('select * from fatec.fatec_contas_receber'); 
-    res.json(result.rows);  // Retorna os resultados da query em formato JSON
-  } catch (err) {
-    console.error('Erro ao buscar contas a receber:', err);
-    res.status(500).send('Erro ao buscar dados de contas a receber');
   }
 });
 
@@ -147,7 +138,7 @@ app.get('/produtos-mais-vendidos-mes/:mes', async (req, res) => {
 });
 
 // Endpoint para obter desempenho por região
-app.get('/desempenho-por-regiao', async (req, res) => {
+app.get('/desempenho-por-cidade', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
@@ -162,8 +153,8 @@ app.get('/desempenho-por-regiao', async (req, res) => {
     `);
     res.status(200).json(result.rows);
   } catch (error) {
-    console.error("Erro ao obter desempenho por região:", error);
-    res.status(500).json({ error: "Erro ao obter desempenho por região" });
+    console.error("Erro ao obter desempenho por cidade:", error);
+    res.status(500).json({ error: "Erro ao obter desempenho por cidade" });
   }
 });
 
@@ -212,23 +203,6 @@ app.get('/relatorios/clientes-frequentes', async (req, res) => {
   }
 });
 
-// Endpoint para retornar todos os produtos de uma categoria específica aqui esta sendo utilizado a categoria copos
-//app.get('/produtos/por-categoria/:categoria', async (req, res) => {
-  //const categoria = req.params.categoria; // O nome da categoria será passado como parâmetro
-  //try {
-   // const result = await pool.query(`
-   //   SELECT * 
-   //   FROM fatec.fatec_produtos
-   //   WHERE id_grupo = 202;
-   /// `, [categoria]);
-
-   // res.status(200).json(result.rows);
-  //} catch (error) {
-  //  console.error('Erro ao buscar produtos por categoria:', error);
-  //  res.status(500).json({ error: 'Erro ao buscar produtos por categoria' });
- // }
-//});
-
 // Endpoint para retornar os detalhes de um cliente específico baseado no seu ID
 app.get('/cliente/:id', async (req, res) => {
   const id = req.params.id; // O ID do cliente será passado como parâmetro tera que ser o id exato do cliente ex:6541
@@ -250,6 +224,219 @@ app.get('/cliente/:id', async (req, res) => {
   }
 });
 
+app.get('/clientes-top-compradores', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        id_cliente,
+        razao_cliente,
+        SUM(qtde) AS total_qtde_comprada,
+        SUM(total) AS total_gasto
+      FROM fatec.fatec_vendas
+      GROUP BY id_cliente, razao_cliente
+      ORDER BY total_qtde_comprada DESC
+      LIMIT 10;
+    `);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Erro ao buscar clientes que mais compraram:", error);
+    res.status(500).json({ error: "Erro ao buscar clientes que mais compraram" });
+  }
+});
+
+app.get('/clientes-frequentes/:mes', async (req, res) => {
+  const mes = req.params.mes; // O mês será passado como parâmetro
+  try {
+    const query = `
+     SELECT 
+        id_cliente,
+        razao_cliente,
+        SUM(total) AS total_compras
+      FROM 
+        fatec.fatec_vendas 
+      WHERE 
+        EXTRACT(YEAR FROM data_emissao) = 2024
+        AND EXTRACT(MONTH FROM data_emissao) = $1
+      GROUP BY 
+        id_cliente, razao_cliente
+      ORDER BY 
+        total_compras DESC
+      LIMIT 10;
+    `;
+
+    const { rows } = await pool.query(query, [mes]);
+
+    res.json(rows);
+  } catch (error) {
+    console.error("Erro ao buscar clientes frequentes:", error);
+    res.status(500).json({ error: 'Erro ao buscar clientes frequentes' });
+  }
+});
+
+
+
+// Gráfico de Pizza por Mês
+app.get('/piechart-data/:month', async (req, res) => {
+  const { month } = req.params;
+  try {
+    const result = await pool.query(
+      `SELECT descricao_produto, SUM(qtde) AS total
+       FROM fatec.fatec_vendas
+       WHERE EXTRACT(MONTH FROM data_emissao) = $1
+       GROUP BY descricao_produto
+       ORDER BY total DESC
+       LIMIT 4`, [month]);
+    const total = result.rows.reduce((sum, row) => sum + parseFloat(row.total), 0);
+    const values = result.rows.map(row => (parseFloat(row.total) / total) * 100);
+    res.json({ values });
+  } catch (err) {
+    console.error('Erro ao buscar dados do gráfico:', err);
+    res.status(500).send('Erro ao buscar dados');
+  }
+});
+
+// Produtos Mais Vendidos por Mês
+app.get('/top-products/:month', async (req, res) => {
+  const { month } = req.params;
+  try {
+    const result = await pool.query(
+      `SELECT descricao_produto, SUM(qtde) AS qtde
+       FROM fatec.fatec_vendas
+       WHERE EXTRACT(MONTH FROM data_emissao) = $1
+       GROUP BY descricao_produto
+       ORDER BY qtde DESC
+       LIMIT 10`, [month]);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Erro ao buscar produtos mais vendidos:', err);
+    res.status(500).send('Erro ao buscar produtos');
+  }
+});
+
+// Endpoint para retornar as vendas dos últimos 6 meses
+app.get('/vendas/ultimos-6-meses', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        TO_CHAR(data_emissao, 'YYYY-MM') AS mes,
+        SUM(total) AS total_vendas
+      FROM 
+        fatec.fatec_vendas
+      WHERE 
+        data_emissao >= CURRENT_DATE - INTERVAL '7 months'
+      GROUP BY 
+        TO_CHAR(data_emissao, 'YYYY-MM')
+      ORDER BY 
+        mes;
+    `);
+
+    const vendasUltimos6Meses = result.rows.map(row => ({
+      mes: row.mes,
+      total_vendas: parseFloat(row.total_vendas)
+    }));
+
+    res.status(200).json(vendasUltimos6Meses);
+  } catch (error) {
+    console.error('Erro ao buscar vendas dos últimos 6 meses:', error);
+    res.status(500).json({ error: 'Erro ao buscar vendas dos últimos 6 meses' });
+  }
+});
+
+// Endpoint para listar as cidades que mais e menos venderam
+app.get('/vendas/por-cidade', async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        cidade, 
+        uf, 
+        SUM(total) AS total_vendas
+      FROM 
+        fatec.fatec_vendas
+      GROUP BY 
+        cidade, uf
+      ORDER BY 
+        total_vendas DESC;
+    `;
+
+    const result = await pool.query(query);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Nenhuma venda encontrada' });
+    }
+
+    const cidadesQueMaisVenderam = result.rows.slice(0, 5); // Top 5 cidades que mais venderam
+    const cidadesQueMenosVenderam = result.rows.slice(-5); // Top 5 cidades que menos venderam
+
+    res.status(200).json({
+      cidadesQueMaisVenderam,
+      cidadesQueMenosVenderam,
+    });
+  } catch (error) {
+    console.error('Erro ao buscar vendas por cidade:', error);
+    res.status(500).json({ error: 'Erro ao buscar vendas por cidade' });
+  }
+});
+
+ // Consulta SQL para buscar as cidades e o total de vendas
+app.get('/dados-pizza', async (req, res) => {
+  try {
+    console.log("Iniciando a consulta para gráfico de pizza...");
+
+    const query = `
+      SELECT cidade, SUM(valor_unitario * qtde) AS total_vendas
+      FROM fatec.fatec_vendas
+      GROUP BY cidade
+      ORDER BY total_vendas DESC
+      LIMIT 4; 
+    `;
+    
+    console.log("Executando consulta SQL:", query);
+
+    const result = await pool.query(query);
+    console.log("Resultados obtidos:", result.rows);
+
+    const dadosPizza = result.rows.map(row => ({
+      label: row.cidade,
+      value: parseFloat(row.total_vendas)
+    }));
+
+    console.log("Dados formatados para o gráfico de pizza:", dadosPizza);
+
+    res.json(dadosPizza);
+  } catch (error) {
+    console.error('Erro ao buscar dados para gráfico de pizza:', error.message);
+    res.status(500).json({ message: 'Erro interno ao processar a solicitação.' });
+  }
+});
+
+// Endpoint: /cidades-mais-venderam no mês selecionado
+app.get('/cidades-mais-venderam-mes/:mes', async (req, res) => {
+  const mes = req.params.mes; // O mês será passado como parâmetro
+  const query = `
+    SELECT
+        cidade,
+        uf,
+        SUM(total) AS valor_total
+      FROM
+        fatec.fatec_vendas
+      WHERE
+        EXTRACT(MONTH FROM data_emissao) = $1
+      GROUP BY
+        cidade, uf
+      ORDER BY
+        valor_total DESC
+      LIMIT 15;
+  `;
+
+  try {
+    const result = await pool.query(query, [mes]); 
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Erro ao buscar cidades que mais venderam:', error);
+    res.status(500).json({ error: 'Erro ao buscar dados' });
+  }
+});
 
 module.exports = router;
 
