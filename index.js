@@ -15,7 +15,7 @@ app.use(express.json());
 // Rota de teste para verificar se a API está conectando ao banco corretamente
 app.get('/produtos', async (req, res) => {
   try {
-    const result = await pool.query('select * from fatec.fatec_produtos'); 
+    const result = await pool.query('select * from public.fatec_produtos'); 
     res.json(result.rows);  // Retorna os resultados da query
   } catch (err) {
     console.error('Erro ao buscar dados dos produtos:', err);
@@ -26,7 +26,7 @@ app.get('/produtos', async (req, res) => {
 // Rota para buscar dados dos clientes
 app.get('/clientes', async (req, res) => {
   try {
-    const result = await pool.query('select * from fatec.fatec_clientes'); 
+    const result = await pool.query('select * from public.fatec_clientes'); 
     res.json(result.rows);  // Retorna os resultados da query em formato JSON
   } catch (err) {
     console.error('Erro ao buscar dados dos clientes:', err);
@@ -37,7 +37,7 @@ app.get('/clientes', async (req, res) => {
 // Rota para buscar dados das vendas
 app.get('/vendas', async (req, res) => {
   try {
-    const result = await pool.query('select * from fatec.fatec_vendas'); 
+    const result = await pool.query('select * from public.fatec_vendas'); 
     res.json(result.rows);  // Retorna os resultados da query em formato JSON
   } catch (err) {
     console.error('Erro ao buscar dados de vendas:', err);
@@ -54,7 +54,7 @@ app.get('/produtos-mais-vendidos', async (req, res) => {
           descricao_produto, 
           SUM(qtde) AS total_vendido
       FROM 
-          fatec.fatec_vendas
+          public.fatec_vendas
       GROUP BY 
           codigo_produto, descricao_produto
       ORDER BY 
@@ -77,7 +77,7 @@ app.get('/venda-mensal', async (req, res) => {
         TO_CHAR(data_emissao, 'YYYY-MM') AS mes,
         SUM(total) AS total
       FROM 
-        fatec.fatec_vendas
+        public.fatec_vendas
       GROUP BY 
         TO_CHAR(data_emissao, 'YYYY-MM')
       ORDER BY 
@@ -102,7 +102,7 @@ app.get('/produtos/mais-vendidos/semana', async (req, res) => {
   try {
       const resultado = await pool.query(`
           SELECT codigo_produto, descricao_produto, SUM(qtde) AS total_vendas
-          FROM fatec.fatec_vendas
+          FROM public.fatec_vendas
           WHERE data_emissao >= CURRENT_DATE - INTERVAL '7 days'
           GROUP BY codigo_produto, descricao_produto
           ORDER BY total_vendas DESC
@@ -117,12 +117,12 @@ app.get('/produtos/mais-vendidos/semana', async (req, res) => {
 
 
 // Endpoint para produtos mais vendidos no mês
-app.get('/produtos-mais-vendidos-mes/:mes', async (req, res) => {
+app.get('/produtos-mais-vendidos-mes/mes', async (req, res) => {
   const mes = req.params.mes; // O mês será passado como parâmetro
   const query = `
     SELECT codigo_produto, descricao_produto, SUM(qtde) AS total_vendas
-    FROM fatec.fatec_vendas
-    WHERE EXTRACT(MONTH FROM data_emissao) = $1
+    FROM public.fatec_vendas
+    WHERE EXTRACT(MONTH FROM data_emissao) = 1
     GROUP BY codigo_produto, descricao_produto
     ORDER BY total_vendas DESC
     LIMIT 20;
@@ -145,7 +145,7 @@ app.get('/desempenho-por-cidade', async (req, res) => {
         cidade, 
         SUM(total) AS total_vendas
       FROM 
-        fatec.fatec_vendas
+        public.fatec_vendas
       GROUP BY 
         cidade
       ORDER BY 
@@ -167,7 +167,7 @@ app.get('/analise/vendas', async (req, res) => {
         SUM(total) AS total_vendas,
         COUNT(*) AS numero_vendas
       FROM 
-        fatec.fatec_vendas
+        public.fatec_vendas
       GROUP BY 
         data_emissao
       ORDER BY 
@@ -190,7 +190,7 @@ app.get('/relatorios/clientes-frequentes', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT id_cliente, razao_cliente, COUNT(*) AS total_compras
-      FROM fatec.fatec_vendas
+      FROM public.fatec_vendas
       GROUP BY id_cliente, razao_cliente
       ORDER BY total_compras DESC
       LIMIT 10;
@@ -209,7 +209,7 @@ app.get('/cliente/:id', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT * 
-      FROM fatec.fatec_clientes 
+      FROM public.fatec_clientes 
       WHERE id_cliente = $1; 
     `, [id]);
 
@@ -232,7 +232,7 @@ app.get('/clientes-top-compradores', async (req, res) => {
         razao_cliente,
         SUM(qtde) AS total_qtde_comprada,
         SUM(total) AS total_gasto
-      FROM fatec.fatec_vendas
+      FROM public.fatec_vendas
       GROUP BY id_cliente, razao_cliente
       ORDER BY total_qtde_comprada DESC
       LIMIT 10;
@@ -254,7 +254,7 @@ app.get('/clientes-frequentes/:mes', async (req, res) => {
         razao_cliente,
         SUM(total) AS total_compras
       FROM 
-        fatec.fatec_vendas 
+        public.fatec_vendas 
       WHERE 
         EXTRACT(YEAR FROM data_emissao) = 2024
         AND EXTRACT(MONTH FROM data_emissao) = $1
@@ -274,15 +274,13 @@ app.get('/clientes-frequentes/:mes', async (req, res) => {
   }
 });
 
-
-
 // Gráfico de Pizza por Mês
 app.get('/piechart-data/:month', async (req, res) => {
   const { month } = req.params;
   try {
     const result = await pool.query(
       `SELECT descricao_produto, SUM(qtde) AS total
-       FROM fatec.fatec_vendas
+       FROM public.fatec_vendas
        WHERE EXTRACT(MONTH FROM data_emissao) = $1
        GROUP BY descricao_produto
        ORDER BY total DESC
@@ -302,7 +300,7 @@ app.get('/top-products/:month', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT descricao_produto, SUM(qtde) AS qtde
-       FROM fatec.fatec_vendas
+       FROM public.fatec_vendas
        WHERE EXTRACT(MONTH FROM data_emissao) = $1
        GROUP BY descricao_produto
        ORDER BY qtde DESC
@@ -322,7 +320,7 @@ app.get('/vendas/ultimos-6-meses', async (req, res) => {
         TO_CHAR(data_emissao, 'YYYY-MM') AS mes,
         SUM(total) AS total_vendas
       FROM 
-        fatec.fatec_vendas
+        public.fatec_vendas
       WHERE 
         data_emissao >= CURRENT_DATE - INTERVAL '7 months'
       GROUP BY 
@@ -352,7 +350,7 @@ app.get('/vendas/por-cidade', async (req, res) => {
         uf, 
         SUM(total) AS total_vendas
       FROM 
-        fatec.fatec_vendas
+        public.fatec_vendas
       GROUP BY 
         cidade, uf
       ORDER BY 
@@ -385,7 +383,7 @@ app.get('/dados-pizza', async (req, res) => {
 
     const query = `
       SELECT cidade, SUM(valor_unitario * qtde) AS total_vendas
-      FROM fatec.fatec_vendas
+      FROM public.fatec_vendas
       GROUP BY cidade
       ORDER BY total_vendas DESC
       LIMIT 4; 
@@ -419,7 +417,7 @@ app.get('/cidades-mais-venderam-mes/:mes', async (req, res) => {
         uf,
         SUM(total) AS valor_total
       FROM
-        fatec.fatec_vendas
+        public.fatec_vendas
       WHERE
         EXTRACT(MONTH FROM data_emissao) = $1
       GROUP BY
@@ -438,7 +436,19 @@ app.get('/cidades-mais-venderam-mes/:mes', async (req, res) => {
   }
 });
 
-module.exports = router;
+// Rota para listar os usuários
+app.get('/usuarios', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM public.usuarios'); 
+    res.json(result.rows);  // Retorna os resultados da query
+  } catch (err) {
+    console.error('Erro ao buscar usuários:', err);
+    res.status(500).send('Erro ao buscar usuários');
+  }
+});
+
+
+//module.exports = router;
 
 // Inicializa o servidor na porta 3000
 const port = process.env.PORT || 3000;
