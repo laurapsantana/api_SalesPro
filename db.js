@@ -1,4 +1,57 @@
 const { Pool } = require('pg');
+
+// NÃO carregue .env se estiver no ambiente do Render
+if (process.env.DB_MODE !== 'render') {
+  require('dotenv').config(); // Apenas carrega o .env se for local
+}
+
+const isRender = process.env.DB_MODE === 'render';
+
+const connectionString = isRender
+  ? process.env.RENDER_CONNECTION_STRING
+  : process.env.CONNECTION_STRING;
+
+const pool = new Pool({
+  connectionString,
+  ssl: isRender ? { rejectUnauthorized: false } : false
+});
+
+pool.on('connect', () => {
+  console.log(`Conectado ao banco de dados ${isRender ? 'Render' : 'local'}.`);
+});
+
+module.exports = pool;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*const { Pool } = require('pg');
 require('dotenv').config();
 
 // Configuração da conexão com o PostgreSQL
@@ -15,3 +68,5 @@ pool.on('connect', () => {
 });
 
 module.exports = pool;
+*/
+
