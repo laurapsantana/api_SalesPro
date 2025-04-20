@@ -452,6 +452,10 @@ app.get('/usuarios', async (req, res) => {
 
 // Inicializa o servidor na porta 3000
 const port = process.env.PORT || 3000;
+app.get('/', (req, res) => {
+  res.send('API SalesPro está no ar! 🚀');
+});
+
 app.listen(port, () => {
   console.log(`Servidor rodando na porta ${port}`);
 });
