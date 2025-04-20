@@ -57,5 +57,3 @@ npm install
 - ├── app.js             # Configuração principal do app
 - └── .env.example       # Exemplo de arquivo de variáveis de ambiente
 
-Forçando novo deploy com secrets configurados
-
