@@ -117,12 +117,12 @@ app.get('/produtos/mais-vendidos/semana', async (req, res) => {
 
 
 // Endpoint para produtos mais vendidos no mês
-app.get('/produtos-mais-vendidos-mes/mes', async (req, res) => {
+app.get('/produtos-mais-vendidos-mes/:mes', async (req, res) => {
   const mes = req.params.mes; // O mês será passado como parâmetro
   const query = `
     SELECT codigo_produto, descricao_produto, SUM(qtde) AS total_vendas
     FROM public.fatec_vendas
-    WHERE EXTRACT(MONTH FROM data_emissao) = 1
+    WHERE EXTRACT(MONTH FROM data_emissao) = $1
     GROUP BY codigo_produto, descricao_produto
     ORDER BY total_vendas DESC
     LIMIT 20;
