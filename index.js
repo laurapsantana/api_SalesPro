@@ -650,7 +650,6 @@ app.get('/produtos/:codigo', async (req, res) => {
 
 
 
-
 //module.exports = router;
 
 // Inicializa o servidor na porta 3000
