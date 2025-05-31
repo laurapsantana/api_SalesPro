@@ -447,6 +447,210 @@ app.get('/usuarios', async (req, res) => {
   }
 });
 
+// Rota: Total de vendas por estado (UF)
+app.get('/vendas/por-estado', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT uf, SUM(total) AS total_vendas
+      FROM public.fatec_vendas
+      GROUP BY uf
+      ORDER BY total_vendas DESC;
+    `);
+
+    const vendasPorEstado = result.rows.map(row => ({
+      uf: row.uf,
+      total_vendas: parseFloat(row.total_vendas)
+    }));
+
+    res.status(200).json(vendasPorEstado);
+  } catch (error) {
+    console.error('Erro ao buscar vendas por estado:', error);
+    res.status(500).json({ error: 'Erro ao buscar vendas por estado' });
+  }
+});
+
+app.get('/analises/ticket-medio', async (req, res) => {
+  try {
+    const resultado = await pool.query(`
+      SELECT
+        razao_cliente,
+        COUNT(*) AS total_vendas,
+        SUM(total) AS total_gasto,
+        ROUND(AVG(total), 2) AS ticket_medio
+      FROM public.fatec_vendas
+      GROUP BY razao_cliente
+      ORDER BY ticket_medio DESC
+      LIMIT 20;
+    `);
+
+    const dados = resultado.rows.map(row => ({
+      cliente: row.razao_cliente,
+      total_vendas: parseInt(row.total_vendas),
+      total_gasto: parseFloat(row.total_gasto),
+      ticket_medio: parseFloat(row.ticket_medio)
+    }));
+
+    res.status(200).json(dados);
+  } catch (err) {
+    console.error('Erro ao buscar ticket médio por cliente:', err);
+    res.status(500).json({ erro: 'Erro ao buscar ticket médio por cliente' });
+  }
+});
+
+// Endpoint: Ticket médio por produto
+app.get('/analises/ticket-medio-produto', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        codigo_produto,
+        descricao_produto,
+        COUNT(*) AS qtd_vendas,
+        SUM(total) AS total_vendido,
+        ROUND(AVG(total), 2) AS ticket_medio
+      FROM public.fatec_vendas
+      GROUP BY codigo_produto, descricao_produto
+      ORDER BY ticket_medio DESC;
+    `);
+
+    const data = result.rows.map(row => ({
+      codigo_produto: row.codigo_produto,
+      descricao_produto: row.descricao_produto,
+      qtd_vendas: parseInt(row.qtd_vendas),
+      total_vendido: parseFloat(row.total_vendido),
+      ticket_medio: parseFloat(row.ticket_medio)
+    }));
+
+    res.status(200).json(data);
+  } catch (error) {
+    console.error('Erro ao calcular ticket médio por produto:', error);
+    res.status(500).json({ error: 'Erro ao calcular ticket médio por produto' });
+  }
+});
+
+// Endpoint para recomendar produtos a um cliente com base nos outros clientes
+app.get('/recomendacoes/:id_cliente', async (req, res) => {
+  const idCliente = req.params.id_cliente;
+
+  try {
+    const result = await pool.query(`
+      WITH produtos_comprados AS (
+        SELECT DISTINCT codigo_produto
+        FROM public.fatec_vendas
+        WHERE id_cliente = $1
+      ),
+      outros_clientes AS (
+        SELECT DISTINCT id_cliente
+        FROM public.fatec_vendas
+        WHERE codigo_produto IN (SELECT codigo_produto FROM produtos_comprados)
+          AND id_cliente != $1
+      ),
+      produtos_recomendados AS (
+        SELECT codigo_produto, descricao_produto, COUNT(*) AS vezes_comprado
+        FROM public.fatec_vendas
+        WHERE id_cliente IN (SELECT id_cliente FROM outros_clientes)
+          AND codigo_produto NOT IN (SELECT codigo_produto FROM produtos_comprados)
+        GROUP BY codigo_produto, descricao_produto
+      )
+      SELECT 
+        codigo_produto, 
+        descricao_produto,
+        vezes_comprado,
+        ROUND(vezes_comprado * 100.0 / SUM(vezes_comprado) OVER (), 2) AS probabilidade
+      FROM produtos_recomendados
+      ORDER BY probabilidade DESC
+      LIMIT 10;
+    `, [idCliente]);
+
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error("Erro ao gerar recomendações:", error);
+    res.status(500).json({ error: "Erro ao gerar recomendações para o cliente" });
+  }
+});
+
+app.get('/analises/recomendacoes-cliente/:idCliente', async (req, res) => {
+  const idCliente = req.params.idCliente;
+
+  const query = `
+    WITH produtos_comprados AS (
+      SELECT DISTINCT codigo_produto
+      FROM public.fatec_vendas
+      WHERE id_cliente = $1
+    ),
+    produtos_nao_comprados AS (
+      SELECT DISTINCT codigo_produto, descricao_produto
+      FROM public.fatec_vendas
+      WHERE codigo_produto NOT IN (SELECT codigo_produto FROM produtos_comprados)
+    ),
+    popularidade AS (
+      SELECT codigo_produto, COUNT(*) AS vezes_comprado
+      FROM public.fatec_vendas
+      WHERE codigo_produto IN (SELECT codigo_produto FROM produtos_nao_comprados)
+      GROUP BY codigo_produto
+    ),
+    total_compras AS (
+      SELECT COUNT(*) AS total FROM public.fatec_vendas
+    )
+    SELECT 
+      pnp.codigo_produto,
+      pnp.descricao_produto,
+      COALESCE(pop.vezes_comprado, 0) AS vezes_comprado,
+      ROUND(100.0 * COALESCE(pop.vezes_comprado, 0) / NULLIF(tc.total, 0), 2) AS probabilidade
+    FROM produtos_nao_comprados pnp
+    LEFT JOIN popularidade pop ON pnp.codigo_produto = pop.codigo_produto,
+    total_compras tc
+    ORDER BY probabilidade DESC
+    LIMIT 10;
+  `;
+
+  try {
+    const result = await pool.query(query, [idCliente]);
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error("Erro ao buscar recomendações:", error);
+    res.status(500).json({ error: "Erro ao buscar recomendações" });
+  }
+});
+
+app.get('/produtos/categorias', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT DISTINCT descricao_grupo
+      FROM public.fatec_produtos
+      WHERE descricao_grupo IS NOT NULL AND descricao_grupo <> ''
+      ORDER BY descricao_grupo;
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Erro ao buscar categorias:', error);
+    res.status(500).json({ error: 'Erro ao buscar categorias' });
+  }
+});
+
+app.get('/produtos/:codigo', async (req, res) => {
+  const codigo = req.params.codigo;
+  try {
+    const result = await pool.query(`
+      SELECT codigo_produto, descricao_produto, categoria, preco
+      FROM public.fatec_produtos
+      WHERE codigo_produto = $1
+    `, [codigo]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Produto não encontrado' });
+    }
+
+    res.status(200).json(result.rows[0]);
+  } catch (error) {
+    console.error('Erro ao buscar detalhes do produto:', error);
+    res.status(500).json({ error: 'Erro ao buscar detalhes do produto' });
+  }
+});
+
+
+
+
+
 
 //module.exports = router;
 
