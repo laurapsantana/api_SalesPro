@@ -1,16 +1,23 @@
+const bcrypt = require('bcrypt');
 const express = require('express');
 const { Pool } = require('pg');
 const app = express();
-const router = express.Router();
-require('dotenv').config();  // Carrega variáveis de ambiente
+require('dotenv').config();
 
-// Configurações de conexão com o banco de dados PostgreSQL
+
+const authRoutes = require('./src/routes/auth');
+const usuariosRoutes = require('./src/routes/usuarios');
+const Usuario = require('./src/models/usuario');
+
+
 const pool = new Pool({
   connectionString: process.env.CONNECTION_STRING,
 });
 
-// Middleware para tratar requisições com JSON
 app.use(express.json());
+
+app.use('/auth', authRoutes);
+app.use('/usuarios', usuariosRoutes);
 
 // Rota de teste para verificar se a API está conectando ao banco corretamente
 app.get('/produtos', async (req, res) => {
@@ -627,7 +634,7 @@ app.get('/produtos/categorias', async (req, res) => {
   }
 });
 
-app.get('/produtos/:codigo', async (req, res) => {
+app.get('/produtos/:codigo', async (req, res) => { //endpoint com erro
   const codigo = req.params.codigo;
   try {
     const result = await pool.query(`
@@ -647,6 +654,37 @@ app.get('/produtos/:codigo', async (req, res) => {
   }
 });
 
+app.post('/login', async (req, res) => {
+  const { email, senha } = req.body;
+
+  try {
+    const usuario = await Usuario.findOne({ where: { email } });
+
+    if (!usuario) {
+      return res.status(401).json({ mensagem: 'Usuário não encontrado.' });
+    }
+
+    const senhaCorreta = await bcrypt.compare(senha, usuario.senha);
+
+    if (!senhaCorreta) {
+      return res.status(401).json({ mensagem: 'Senha incorreta.' });
+    }
+
+    res.json({
+      mensagem: 'Login bem-sucedido!',
+      usuario: {
+        id: usuario.id,
+        nome: usuario.nome,
+        email: usuario.email
+      }
+    });
+  } catch (error) {
+    console.error('Erro no login:', error);
+    res.status(500).json({ mensagem: 'Erro interno do servidor.' });
+  }
+});
+
+
 
 
 
@@ -661,5 +699,4 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
   console.log(`Servidor rodando na porta ${port}`);
 });
-
 
