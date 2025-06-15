@@ -1,4 +1,4 @@
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 
 // Simulação de um banco de dados (substitua por sua lógica real)
 const usuarios = [

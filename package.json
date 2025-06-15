@@ -11,7 +11,7 @@
   "license": "ISC",
   "description": "API para contabilidade",
   "dependencies": {
-    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.2",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "pg": "^8.13.0",
