@@ -1,6 +1,9 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
+# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+
 name: Build and deploy Node.js app to Azure Web App - salespro-api-webapp
 
 on:
@@ -31,6 +34,9 @@ jobs:
 
       - name: Zip artifact for deployment
         run: zip -r release.zip . -x "*.git*" -x "*node_modules*" -x "*.github*" -x "release.zip"
+
+      - name: List contents of release.zip
+        run: unzip -l release.zip
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
