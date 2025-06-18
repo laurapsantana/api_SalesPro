@@ -1,6 +1,5 @@
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const pool = new Pool({
@@ -24,11 +23,7 @@ async function login(req, res) {
       return res.status(400).json({ error: "Senha incorreta" });
     }
 
-    const token = jwt.sign(
-      { id: usuario.id, email: usuario.email },
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' }
-    );
+    
 
     res.status(200).json({
       message: "Login bem-sucedido!",
